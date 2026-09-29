@@ -1,0 +1,10 @@
+.DS_Store
+.codegraph/
+.bundle/
+coverage/
+tmp/
+routes.json
+*.local.json
+*.log
+.env*
+!.env.example

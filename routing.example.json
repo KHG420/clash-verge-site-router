@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "base_profile": "日常订阅",
+  "routes": [
+    { "site": "github", "subscription": "开发订阅" },
+    { "domain": "example.com", "subscription": "备用订阅" },
+    { "domain": "api.example.com", "exact": true, "subscription": "开发订阅" }
+  ]
+}
