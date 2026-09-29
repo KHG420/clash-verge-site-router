@@ -57,10 +57,26 @@ module VergeRouter
       unless data.is_a?(Hash) && data['version'] == 1 && data['routes'].is_a?(Array) && data['base_profile'].is_a?(String)
         raise Error, '网站映射必须包含 version: 1、base_profile 和 routes 列表'
       end
-      raise Error, '网站映射含未知顶层字段' unless (data.keys - %w[version base_profile routes]).empty?
+      validate_config(data)
       data
     rescue JSON::ParserError
       raise Error, '网站映射 JSON 语法错误（已隐藏原始内容）'
+    end
+
+    def validate_config(data)
+      unless data.is_a?(Hash) && data['version'] == 1 && data['routes'].is_a?(Array) && data['base_profile'].is_a?(String)
+        raise Error, '网站映射必须包含 version: 1、base_profile 和 routes 列表'
+      end
+      raise Error, '网站映射含未知顶层字段' unless (data.keys - %w[version base_profile routes policies]).empty?
+      raise Error, '节点偏好必须是对象' if data.key?('policies') && !data['policies'].is_a?(Hash)
+      data.fetch('policies', {}).each do |uid, policy|
+        raise Error, '节点偏好格式错误' unless uid.is_a?(String) && policy.is_a?(Hash) &&
+          (policy.keys - %w[mode node regions]).empty? && %w[manual fixed auto fallback].include?(policy['mode'])
+        raise Error, '固定节点需要节点名称' if policy['mode'] == 'fixed' && (!policy['node'].is_a?(String) || policy['node'].empty?)
+        raise Error, '地区筛选需要文字列表' if policy.key?('regions') && (!policy['regions'].is_a?(Array) ||
+          policy['regions'].any? { |r| !r.is_a?(String) || r.empty? || r.size > 80 } || policy['regions'].size > 20)
+      end
+      data
     end
 
     def save_config(data)
@@ -96,7 +112,20 @@ module VergeRouter
       name
     end
 
+    def self.site_key(value)
+      text = value.to_s.strip
+      if text.match?(%r{\Ahttps?://}i)
+        uri = URI.parse(text)
+        raise Error, '网址不能包含登录凭证' if uri.userinfo
+        text = uri.host
+      end
+      presets.key?(text) ? text : domain(text)
+    rescue URI::InvalidURIError
+      raise Error, '网址格式错误'
+    end
+
     def add(site, target, exact = false)
+      site = self.class.site_key(site)
       @storage.locked do
         data = config
         subscription = resolve(target)
@@ -115,7 +144,7 @@ module VergeRouter
     def remove(site)
       @storage.locked do
         data = config
-        key = self.class.presets.key?(site) ? site : self.class.domain(site)
+        key = self.class.site_key(site)
         count = data['routes'].size
         data['routes'].reject! { |r| (r['site'] || r['domain']) == key }
         raise Error, '映射中没有这个网站' if count == data['routes'].size
@@ -186,15 +215,15 @@ module VergeRouter
       end
     end
 
-    def plan
+    def plan(mapping_override = nil, ownership_override = nil)
       @storage.check_pending!
       catalog_bytes = @storage.read('profiles.yaml')
       c = catalog(catalog_bytes)
-      mapping = config
+      mapping = validate_config(mapping_override || config)
       base = resolve(mapping['base_profile'], c)
       raise Error, '请先在 Clash Verge 中激活映射所指定的主订阅' unless base['uid'] == c['current']
       state_bytes = @storage.read(STATE)
-      old = state(state_bytes)
+      old = ownership_override || state(state_bytes)
       raise Error, '已有其他主订阅的管理状态，请先回滚旧配置' if old && old['base_uid'] != base['uid']
       if mapping['routes'].empty? && old.nil?
         return Plan.new(changes: {}, seeds: {}, expected: {}, guards: {},
@@ -223,11 +252,13 @@ module VergeRouter
       guards = { 'profiles.yaml' => Storage.hash(catalog_bytes) }
       guards['clash-verge.yaml'] = Storage.hash(runtime) if runtime
       mapping['routes'].each do |route|
-        unless route.is_a?(Hash) && (route.keys - %w[site domain exact subscription]).empty? &&
+        unless route.is_a?(Hash) && (route.keys - %w[site domain exact subscription enabled]).empty? &&
                route['subscription'].is_a?(String) && (!!route['site'] ^ !!route['domain']) &&
-               (!route.key?('exact') || [true, false].include?(route['exact']))
+               (!route.key?('exact') || [true, false].include?(route['exact'])) &&
+               (!route.key?('enabled') || [true, false].include?(route['enabled']))
           raise Error, '每条映射需要 subscription 和 site/domain 其中之一；exact 必须是布尔值'
         end
+        next if route['enabled'] == false
         target = resolve(route['subscription'], c)
         raise Error, '目标订阅需要是远程订阅，才能自动更新代理集合' unless target['type'] == 'remote'
         targets[target['uid']] = target
@@ -278,12 +309,28 @@ module VergeRouter
         end
         providers[provider_name] = provider
         group_names[uid] = group_name
-        new_groups << { 'name' => group_name, 'type' => 'select', 'use' => [provider_name] }
         source_path = profile_path(target)
         source = @storage.read(source_path)
         raise Error, '目标订阅没有本地缓存，请先在 Clash Verge 更新它' unless source
         nodes = YamlDocument.new(source, '目标订阅缓存').data['proxies']
         raise Error, '目标订阅缓存没有节点列表，不支持仅引用外部 providers 的订阅' unless nodes.is_a?(Array) && !nodes.empty?
+        policy = mapping.fetch('policies', {})[uid] || { 'mode' => 'manual' }
+        members = nodes.map { |node| node['name'] }.compact
+        regions = policy.fetch('regions', [])
+        members.select! { |name| regions.any? { |r| name.downcase.include?(r.downcase) } } unless regions.empty?
+        members.select! { |name| name == policy['node'] } if policy['mode'] == 'fixed'
+        raise Error, '节点偏好没有匹配节点，请重新选择固定节点或地区' if members.empty?
+        group = { 'name' => group_name, 'type' => { 'auto' => 'url-test', 'fallback' => 'fallback' }.fetch(policy['mode'], 'select'), 'use' => [provider_name] }
+        if policy['mode'] == 'fixed'
+          group['filter'] = '^' + Regexp.escape("[VR:#{token}] #{policy['node']}") + '$'
+        elsif !regions.empty?
+          group['filter'] = '(?i)(' + regions.map { |r| Regexp.escape(r) }.join('|') + ')'
+        end
+        if %w[auto fallback].include?(policy['mode'])
+          group.merge!('url' => 'https://www.gstatic.com/generate_204', 'interval' => 600, 'lazy' => true)
+          group['tolerance'] = 80 if policy['mode'] == 'auto'
+        end
+        new_groups << group
         seeds[cache_path] = source unless @storage.read(cache_path)
         guards[source_path] = Storage.hash(source)
       end

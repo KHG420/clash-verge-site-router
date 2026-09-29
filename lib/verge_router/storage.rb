@@ -131,7 +131,7 @@ module VergeRouter
       raise Error, '备份清单格式错误' unless entries.is_a?(Array) && entries.map { |x| x['path'] }.uniq.size == entries.size
       entries.each do |entry|
         relative = entry.fetch('path')
-        unless relative.match?(%r{\Aprofiles/[A-Za-z0-9_.-]+\.yaml\z}) || relative == 'verge-router/state.json'
+        unless relative.match?(%r{\Aprofiles/[A-Za-z0-9_.-]+\.yaml\z}) || %w[verge-router/state.json verge-router/routes.json verge-router/manager.json].include?(relative)
           raise Error, '备份含非工具管理的目标路径'
         end
         current = self.class.hash(read(relative))

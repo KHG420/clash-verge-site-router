@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Verge 路由工作台</title>
+  <link rel="stylesheet" href="/style.css">
+  <script defer src="/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到主要内容</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="主导航">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><div><strong>Verge 路由</strong><span>本地工作台</span></div></div>
+      <nav id="nav">
+        <button type="button" class="nav-item is-active" data-view="overview" aria-current="page">订阅总览</button>
+        <button type="button" class="nav-item" data-view="routes">网站规则</button>
+        <button type="button" class="nav-item" data-view="nodes">节点偏好</button>
+        <button type="button" class="nav-item" data-view="scenarios">使用场景</button>
+        <button type="button" class="nav-item" data-view="diagnose">路由诊断</button>
+        <button type="button" class="nav-item" data-view="transfer">导入与导出</button>
+        <button type="button" class="nav-item" data-view="history">变更与备份</button>
+        <button type="button" class="nav-item" data-view="alerts">提醒设置</button>
+      </nav>
+      <div class="sidebar-foot"><span class="local-dot" aria-hidden="true"></span>仅在本机管理</div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div><span class="topbar-label">当前基础配置</span><strong id="base-name">正在连接…</strong></div>
+        <div class="topbar-actions"><span id="sync-time" class="quiet">尚未同步</span><button type="button" class="button button-quiet" id="reload-button">重新读取</button></div>
+      </header>
+      <main id="main" tabindex="-1">
+        <div id="global-message" class="message hidden" role="alert"></div>
+        <div id="loading" class="loading" aria-live="polite"><div class="skeleton title"></div><div class="skeleton line"></div><div class="skeleton line short"></div><p>正在读取本地配置…</p></div>
+        <div id="content" class="hidden">
+          <section class="view" data-panel="overview" aria-labelledby="overview-title">
+            <div class="page-heading"><div><h1 id="overview-title">订阅总览</h1><p>集中查看网站归属、流量和更新时间。未知数值保持为空，不影响路由判断。</p></div><button type="button" class="button button-primary" id="refresh-all">刷新全部订阅</button></div>
+            <div id="status-banner" class="status-banner"></div>
+            <div class="toolbar"><label class="field search-field"><span>查找订阅</span><input id="subscription-search" type="search" placeholder="名称、别名或标签" autocomplete="off"></label><span id="subscription-count" class="quiet"></span></div>
+            <div id="subscription-list" class="record-list"></div>
+          </section>
+
+          <section class="view hidden" data-panel="routes" aria-labelledby="routes-title">
+            <div class="page-heading"><div><h1 id="routes-title">网站规则</h1><p>把网站指向指定订阅。保存后在下方预览，再应用并检查客户端状态。</p></div><button type="button" class="button button-primary" id="deploy-button">预览并应用</button></div>
+            <div class="panel"><h2>添加网站</h2><form id="add-route-form" class="inline-form"><label class="field"><span>网站域名</span><input name="site" required placeholder="example.com" spellcheck="false" autocomplete="off"></label><label class="field"><span>使用订阅</span><select name="subscription" required class="subscription-select"></select></label><label class="check-field"><input name="exact" type="checkbox"><span>仅匹配此域名</span></label><button class="button button-primary" type="submit">添加规则</button></form></div>
+            <div class="panel"><div class="section-heading"><div><h2>批量添加</h2><p>每行一个域名，沿用同一订阅。</p></div></div><form id="batch-route-form" class="stack-form"><label class="field"><span>网站列表</span><textarea name="sites" rows="3" required placeholder="example.com&#10;example.org" spellcheck="false"></textarea></label><div class="form-end"><label class="field"><span>使用订阅</span><select name="subscription" required class="subscription-select"></select></label><label class="check-field"><input name="exact" type="checkbox"><span>仅匹配所列域名</span></label><button class="button button-secondary" type="submit">批量添加</button></div></form></div>
+            <div class="section-heading"><div><h2>已保存规则</h2><p id="route-count" class="quiet"></p></div></div><div id="route-list" class="record-list"></div>
+          </section>
+
+          <section class="view hidden" data-panel="nodes" aria-labelledby="nodes-title">
+            <div class="page-heading"><div><h1 id="nodes-title">节点偏好</h1><p>节点始终来自网站指定的订阅。固定节点、地区筛选或自动选择可按订阅独立设置。</p></div></div>
+            <div class="toolbar"><label class="field"><span>选择订阅</span><select id="nodes-subscription" class="subscription-select"></select></label></div>
+            <div id="nodes-content" class="panel"><p class="quiet">请选择订阅查看节点。</p></div>
+          </section>
+
+          <section class="view hidden" data-panel="scenarios" aria-labelledby="scenarios-title">
+            <div class="page-heading"><div><h1 id="scenarios-title">使用场景</h1><p>保存当前网站规则，在不同工作状态间切换。切换前先预览受影响的规则。</p></div></div>
+            <form id="scene-save-form" class="panel inline-form"><label class="field"><span>新场景名称</span><input name="name" required maxlength="80" placeholder="例如：日常工作" autocomplete="off"></label><button type="submit" class="button button-primary">保存当前规则</button></form>
+            <div id="scenario-list" class="record-list"></div>
+            <div id="scenario-preview" class="panel hidden"></div>
+            <div class="panel"><h2>可用预设</h2><p>将常用网站规则加入所选订阅，保存后再预览并应用。</p><label class="field"><span>使用订阅</span><select id="preset-subscription" class="subscription-select"></select></label><div id="preset-list" class="record-list"></div></div>
+          </section>
+
+          <section class="view hidden" data-panel="diagnose" aria-labelledby="diagnose-title">
+            <div class="page-heading"><div><h1 id="diagnose-title">路由诊断</h1><p>分别查看已保存的预期、客户端实际规则与观测结果，便于定位未生效的配置。</p></div></div>
+            <form id="diagnose-form" class="panel inline-form"><label class="field"><span>检查网站</span><input name="domain" required placeholder="example.com 或完整网址" spellcheck="false" autocomplete="off"></label><button class="button button-primary" type="submit">开始诊断</button></form>
+            <div id="diagnose-result" aria-live="polite"></div>
+          </section>
+
+          <section class="view hidden" data-panel="transfer" aria-labelledby="transfer-title">
+            <div class="page-heading"><div><h1 id="transfer-title">导入与导出</h1><p>下载不含凭证的网站映射，或从另一份映射导入。导入前需核对订阅绑定。</p></div></div>
+            <div class="panel"><h2>导出映射</h2><p>文件保存网站规则和本地偏好，不包含订阅地址或访问密钥。</p><button type="button" class="button button-secondary" id="export-button">下载 JSON</button></div>
+            <div class="panel"><h2>导入映射</h2><label class="field"><span>选择 JSON 文件</span><input id="import-file" type="file" accept=".json,application/json"></label><div id="import-bindings" class="binding-list"></div><div class="button-row"><button type="button" class="button button-secondary" id="import-preview" disabled>预览导入</button><button type="button" class="button button-primary hidden" id="import-commit">确认导入</button></div><div id="import-result"></div></div>
+          </section>
+
+          <section class="view hidden" data-panel="history" aria-labelledby="history-title">
+            <div class="page-heading"><div><h1 id="history-title">变更与备份</h1><p>先查看计划，再应用到客户端。回滚会恢复选中备份中的配置。</p></div><button type="button" class="button button-secondary" id="verify-button">检查已生效状态</button></div>
+            <div class="panel"><div class="section-heading"><div><h2>应用计划</h2><p>显示即将写入的规则和文件。</p></div><button type="button" class="button button-quiet" id="plan-button">重新生成预览</button></div><div id="plan-content" class="quiet">正在读取计划…</div><div class="button-row"><button type="button" class="button button-primary" id="history-deploy" disabled>应用计划</button></div></div>
+            <div class="panel"><h2>配置备份</h2><div id="backup-list" class="record-list"></div></div>
+            <div class="panel"><h2>接管旧手工配置</h2><p>逐项预览可接管的规则，确认后才纳入本工具管理。</p><div id="adoption-list" class="record-list"></div><div id="adoption-preview"></div></div>
+            <div class="panel"><h2>集成状态</h2><div id="integration-content"></div></div>
+          </section>
+
+          <section class="view hidden" data-panel="alerts" aria-labelledby="alerts-title">
+            <div class="page-heading"><div><h1 id="alerts-title">提醒设置</h1><p>在配额、到期和更新时间达到阈值时提示。提醒依据缓存数据，保留其更新时间。关闭面板后将停止浏览器提醒。</p></div><button type="button" class="button button-secondary" id="notify-button">发送提醒</button></div>
+            <div class="panel"><h2>提醒阈值</h2><form id="alerts-form" class="inline-form"><label class="field"><span>到期前天数</span><input name="expiry_days" type="number" min="0" max="365" required></label><label class="field"><span>剩余流量百分比</span><input name="remaining_percent" type="number" min="0" max="100" required></label><label class="field"><span>资料过期天数</span><input name="stale_days" type="number" min="0" max="365" required></label><button class="button button-primary" type="submit">保存设置</button></form><div class="button-row"><button type="button" class="button button-quiet" id="browser-notify">开启浏览器通知</button><span id="notification-state" class="quiet"></span></div></div>
+            <div class="section-heading"><div><h2>当前提醒</h2></div></div><div id="alert-list" class="record-list"></div>
+          </section>
+        </div>
+      </main>
+      <aside id="activity" class="activity hidden" aria-label="最近操作结果" aria-live="polite"><div class="activity-head"><strong>操作结果</strong><button type="button" class="icon-button" id="activity-close" aria-label="关闭操作结果">×</button></div><div id="activity-body"></div></aside>
+    </div>
+  </div>
+</body>
+</html>

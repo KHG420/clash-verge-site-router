@@ -22,4 +22,6 @@ jobs:
       - name: Install test-only dependency
         run: gem install minitest --version 5.25.5 --no-document
       - name: Run tests
-        run: ruby -Itest test/test_router.rb
+        run: ruby -Itest test/run.rb
+      - name: Check browser script
+        run: node --check web/app.js

@@ -253,7 +253,7 @@ class RouterTest < Minitest::Test
   end
 
   def test_invalid_domains_cannot_inject_rules
-    ['https://example.com', '*.example.com', 'example.com,DIRECT', '127.0.0.1', 'bad..example', '-bad.example', "a.example\nMATCH,DIRECT"].each do |domain|
+    ['https://user:secret@example.com', '*.example.com', 'example.com,DIRECT', '127.0.0.1', 'bad..example', '-bad.example', "a.example\nMATCH,DIRECT"].each do |domain|
       assert_raises(VergeRouter::Error) { @router.add(domain, 'dev') }
     end
     assert_equal 'example.com', VergeRouter::Router.domain('EXAMPLE.COM.')
@@ -388,7 +388,7 @@ class RouterTest < Minitest::Test
   end
 
   def test_controller_reads_unix_socket_and_handles_secret_without_logging
-    socket_path = File.join(@dir, 'controller.sock')
+    socket_path = File.join(@dir, 'c.sock')
     server = UNIXServer.new(socket_path)
     request = nil
     thread = Thread.new do
